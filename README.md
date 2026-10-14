@@ -7,7 +7,7 @@ A responsive workspace for learning Python and C. Write code, run Python locally
 - A modern browser with JavaScript and WebAssembly support.
 - An internet connection to load Pyodide and web fonts, and to contact Wandbox for C runs.
 
-This is a static site and has **no build step or server-side dependencies to install**. Python uses Pyodide 0.26.2 from jsDelivr. C source is sent directly from the browser to the Wandbox compile API and compiled with GCC 13.2.0 on Wandbox's servers. This removes the browser's first-run Clang download (about 100 MB); each C run uploads only the source text and receives the output. C source is limited to 32,768 characters per run. GitHub Pages remains the static host; no application backend is required.
+This is a static site and has **no build step or server-side dependencies to install**. Python uses Pyodide 0.26.2 from jsDelivr. C source is sent directly from the browser to the Wandbox compile API and compiled with GCC 13.2.0 on Wandbox's servers. This removes the browser's first-run Clang download (about 100 MB); each C run uploads only the source text and receives the output. C source is limited to 32,768 characters per run, and a transient sandbox startup resource error is retried once. GitHub Pages remains the static host; no application backend is required.
 
 ## Run locally
 

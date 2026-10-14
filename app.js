@@ -281,28 +281,35 @@
     if (code.length > MAX_C_SOURCE_LENGTH) {
       throw new Error(`This C editor accepts source up to ${MAX_C_SOURCE_LENGTH.toLocaleString()} characters to limit upload size.`);
     }
-    setRuntimeStatus('Sending C source to Wandbox…', 'loading');
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
-    let response;
-    try {
-      response = await fetch(WANDBOX_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ compiler: WANDBOX_COMPILER, code, options: '', stdin: '' }),
-        signal: controller.signal
-      });
-    } catch (error) {
-      if (error.name === 'AbortError') throw new Error('Wandbox took too long to respond. Please try again.');
-      throw new Error('Could not reach Wandbox. Check your connection and try again.');
-    } finally {
-      clearTimeout(timeout);
+    let result;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      setRuntimeStatus(attempt === 0 ? 'Sending C source to Wandbox…' : 'Wandbox is busy · retrying once…', 'loading');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
+      let response;
+      try {
+        response = await fetch(WANDBOX_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ compiler: WANDBOX_COMPILER, code, options: '', stdin: '' }),
+          signal: controller.signal
+        });
+      } catch (error) {
+        if (error.name === 'AbortError') throw new Error('Wandbox took too long to respond. Please try again.');
+        throw new Error('Could not reach Wandbox. Check your connection and try again.');
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!response.ok) {
+        if (response.status === 429) throw new Error('Wandbox is rate-limiting requests. Wait a moment and try again.');
+        throw new Error(`Wandbox returned HTTP ${response.status}. Please try again later.`);
+      }
+      result = await response.json();
+      const allMessages = [result.compiler_error, result.compiler_output, result.program_error, result.program_output].join('\n');
+      const sandboxTemporarilyBusy = /crun: clone: Resource temporarily unavailable|OCI runtime error[^\n]*Resource temporarily unavailable/i.test(allMessages);
+      if (!sandboxTemporarilyBusy || attempt > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 800));
     }
-    if (!response.ok) {
-      if (response.status === 429) throw new Error('Wandbox is rate-limiting requests. Wait a moment and try again.');
-      throw new Error(`Wandbox returned HTTP ${response.status}. Please try again later.`);
-    }
-    const result = await response.json();
     const compileError = result.compiler_error || '';
     const compileOutput = result.compiler_output || '';
     const programOutput = result.program_output || '';
