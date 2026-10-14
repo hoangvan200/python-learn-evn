@@ -282,6 +282,7 @@
       throw new Error(`This C editor accepts source up to ${MAX_C_SOURCE_LENGTH.toLocaleString()} characters to limit upload size.`);
     }
     let result;
+    let sandboxTemporarilyBusy = false;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       setRuntimeStatus(attempt === 0 ? 'Sending C source to Wandbox…' : 'Wandbox is busy · retrying once…', 'loading');
       const controller = new AbortController();
@@ -306,7 +307,7 @@
       }
       result = await response.json();
       const allMessages = [result.compiler_error, result.compiler_output, result.program_error, result.program_output].join('\n');
-      const sandboxTemporarilyBusy = /crun: clone: Resource temporarily unavailable|OCI runtime error[^\n]*Resource temporarily unavailable/i.test(allMessages);
+      sandboxTemporarilyBusy = /crun: clone: Resource temporarily unavailable|OCI runtime error[^\n]*Resource temporarily unavailable/i.test(allMessages);
       if (!sandboxTemporarilyBusy || attempt > 0) break;
       await new Promise((resolve) => setTimeout(resolve, 800));
     }
@@ -314,7 +315,9 @@
     const compileOutput = result.compiler_output || '';
     const programOutput = result.program_output || '';
     const programError = result.program_error || '';
-    let message = [compileOutput, compileError, programOutput, programError].filter(Boolean).join('\n');
+    let message = sandboxTemporarilyBusy
+      ? 'Wandbox is temporarily short of sandbox resources. Your C program could not start; wait a moment and try again.'
+      : [compileOutput, compileError, programOutput, programError].filter(Boolean).join('\n');
     if (message.length > 12000) message = `${message.slice(0, 12000)}\n[Output truncated]`;
     const duration = (performance.now() - started) / 1000;
     const success = String(result.status) === '0';
