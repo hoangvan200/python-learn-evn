@@ -4,21 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f5f7fb">
-  <meta name="description" content="A friendly browser-based environment for learning and running Python. Write, run, and revisit Python code in your browser.">
+  <meta name="description" content="A friendly browser-based environment for learning and running Python and C. Write, run, and revisit code in your browser.">
   <meta name="color-scheme" content="light">
-  <title>Python Learn Environment</title>
+  <title>Code Learn Environment</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://registry.wasmer.io" crossorigin>
+  <link rel="preconnect" href="https://cdn.wasmer.io" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#main" aria-label="Python Learn Environment home">
-      <span class="brand-mark" aria-hidden="true">Py</span>
-      <span>Python <strong>Learn Environment</strong></span>
+    <a class="brand" href="#main" aria-label="Code Learn Environment home">
+      <span class="brand-mark" aria-hidden="true">&lt;/&gt;</span>
+      <span>Code <strong>Learn Environment</strong></span>
     </a>
     <div class="topbar-status" aria-live="polite" aria-atomic="true">
       <span id="runtime-indicator" class="status-dot loading" aria-hidden="true"></span>
@@ -31,19 +32,26 @@
       <div>
         <p class="eyebrow">YOUR BROWSER-BASED WORKSPACE</p>
         <h1 id="page-title">Learn by running Python.</h1>
-        <p class="intro">Write a little code, run it right here, and keep a record of what you’ve tried. Your code and run history stay in this browser.</p>
+        <p id="page-intro" class="intro">Write a little code, run it right here, and keep a record of what you’ve tried. Your code and run history stay in this browser.</p>
       </div>
       <div class="python-badge" aria-hidden="true"><span>❮</span><span>❯</span></div>
     </section>
 
-    <section class="workspace" aria-label="Python workspace">
+      <div class="workspace" id="language-workspace" aria-label="Python workspace">
       <div class="panel editor-panel">
         <div class="panel-heading editor-heading">
-          <div class="heading-title"><span class="file-icon" aria-hidden="true">▤</span><div><h2>Python editor</h2><p>main.py</p></div></div>
+          <div class="heading-title"><span class="file-icon" aria-hidden="true">▤</span><div><h2 id="editor-title">Python editor</h2><p id="editor-filename">main.py</p></div></div>
+          <div class="language-picker-wrap">
+            <label class="sr-only" for="language-select">Choose a programming language</label>
+            <select id="language-select" class="language-select" aria-label="Choose a programming language">
+              <option value="python">Python</option>
+              <option value="c">C</option>
+            </select>
+          </div>
           <div class="editor-actions">
-            <label class="button button-secondary upload-button" for="file-picker" tabindex="0">Open .py</label>
+            <label id="open-file-button" class="button button-secondary upload-button" for="file-picker" tabindex="0">Open file</label>
             <input id="file-picker" type="file" accept=".py,text/x-python,text/plain" hidden>
-            <button id="save-file-button" class="button button-secondary" type="button">Save .py</button>
+            <button id="save-file-button" class="button button-secondary" type="button">Save file</button>
           </div>
         </div>
         <div class="editor-wrap">
@@ -60,7 +68,7 @@ for number in range(1, 4):
           <span id="cursor-position" aria-live="polite">Ln 1, Col 1</span>
         </div>
         <div class="runbar">
-          <p>Runs privately in your browser with Pyodide.</p>
+          <p id="runbar-description">Python runs locally in your browser with Pyodide.</p>
           <button id="run-button" class="button button-primary" type="button" disabled><span aria-hidden="true">▶</span> <span id="run-label">Starting Python…</span></button>
         </div>
       </div>
