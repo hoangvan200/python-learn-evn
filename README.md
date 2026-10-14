@@ -19,6 +19,14 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000> in a modern browser. You can also host the files on any static web host that serves `index.html`.
 
+## Publish with GitHub Pages
+
+The repository includes a GitHub Actions workflow that publishes the site to GitHub Pages whenever changes are pushed to `main`, or when the workflow is started manually. The published site URL is:
+
+<https://hoangvan200.github.io/python-learn-evn/>
+
+In the repository's **Settings → Pages**, select **GitHub Actions** as the build and deployment source. The first deployment will run automatically after the Pages site is enabled and the workflow is pushed.
+
 ## Features
 
 - Run Python in the browser using Pyodide.
