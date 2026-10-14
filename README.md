@@ -1,13 +1,13 @@
 # Code Learn Environment
 
-A responsive, browser-based workspace for learning Python and C. Write code, run it in a WebAssembly runtime, view output and errors, and revisit recent runs saved in your browser.
+A responsive workspace for learning Python and C. Write code, run Python locally or compile C remotely, view output and errors, and revisit recent runs saved in your browser.
 
 ## Requirements
 
 - A modern browser with JavaScript and WebAssembly support.
-- An internet connection to load language runtimes and web fonts on demand.
+- An internet connection to load Pyodide and web fonts, and to contact Wandbox for C runs.
 
-This is a static site and has **no build step or server-side dependencies to install**. Python uses Pyodide 0.26.2 from jsDelivr. C uses the official browser Clang integration (`@wasmer/sdk` 0.8.0) and the `clang/clang` package from the Wasmer registry. Selecting a language checks and initializes its runtime; missing packages are fetched automatically. The first C setup downloads a large compiler package (about 100 MB); the browser's normal HTTP cache can reuse it on later visits. The C runtime requires HTTPS, a modern browser with WebAssembly and SharedArrayBuffer support, and a service worker; on GitHub Pages, the service worker enables the required cross-origin isolation and may reload the page once when C is first selected.
+This is a static site and has **no build step or server-side dependencies to install**. Python uses Pyodide 0.26.2 from jsDelivr. C source is sent directly from the browser to the Wandbox compile API and compiled with GCC 13.2.0 on Wandbox's servers. This removes the browser's first-run Clang download (about 100 MB); each C run uploads only the source text and receives the output. C source is limited to 32,768 characters per run. GitHub Pages remains the static host; no application backend is required.
 
 ## Run locally
 
@@ -30,15 +30,15 @@ In the repository's **Settings → Pages**, select **GitHub Actions** as the bui
 ## Features
 
 - Run Python in the browser using Pyodide.
-- Switch to C and compile/run C programs with Clang in WebAssembly, without a backend.
-- Load each language runtime only when selected and reuse cached runtime packages on later visits.
+- Switch to C and compile/run it on Wandbox without downloading a compiler to the device.
+- Keep Python execution local in Pyodide; only C source and input are sent to the remote compiler.
 - View program output and compile/runtime errors, with execution time.
 - Use Tab for four-space indentation and Ctrl+Enter (or Command+Enter) to run.
 - Open and save `.py` and `.c` files.
 - Keep the latest 30 runs in browser local storage; load a previous run back into the editor or clear the history.
 - Responsive editor and output panels for desktop, tablet, and mobile screens.
 - Subtle interaction and entrance animations that respect the operating system's reduced-motion preference.
-- No account or application server required.
+- No account or project-owned application server required.
 
 ## Checks
 
@@ -50,6 +50,6 @@ node --check app.js
 
 ## Privacy and limitations
 
-Run history and code drafts are stored in this browser's local storage and are not sent to an application server. Clearing browser site data removes them. Runtime packages and fonts are loaded from third-party CDNs/registries. Python and C source code execute locally in browser WebAssembly runtimes; the source is not sent to an application server. This is a learning environment, not a security sandbox for untrusted code. Interactive terminal input (`input()` in Python or `scanf()` in C) is not supported by this simple interface.
+Run history and code drafts are stored in this browser's local storage. Clearing browser site data removes them. Python code executes locally in Pyodide. **When you run C, the source code and stdin are transmitted to Wandbox and executed on its servers. Do not submit secrets, credentials, personal data, or private code.** Wandbox states in its [source repository](https://github.com/melpon/wandbox) that it provides no SLA and applies restrictions to repeated access from the same IP, so remote compilation can be unavailable or rate-limited. See [Wandbox](https://wandbox.org/) for the service. This is a learning environment, not a security sandbox for code you do not trust. Interactive terminal input (`input()` in Python or `scanf()` in C) is not supported by this simple interface.
 
-The C runtime uses the MIT-licensed `coi-serviceworker` v0.1.7 to enable cross-origin isolation on GitHub Pages; see [COI-SERVICEWORKER-LICENSE](COI-SERVICEWORKER-LICENSE).
+The legacy `coi-serviceworker.js` file is retained for browsers that may still have the previous local C runtime's service worker registered; new visits no longer load it.

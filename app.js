@@ -5,8 +5,10 @@
   const LANGUAGE_KEY = 'python-learn-environment-language-v1';
   const DRAFTS_KEY = 'python-learn-environment-drafts-v1';
   const MAX_HISTORY = 30;
+  const MAX_C_SOURCE_LENGTH = 32768;
   const PYODIDE_VERSION = '0.26.2';
-  const WASMER_SDK_VERSION = '0.8.0';
+  const WANDBOX_API = 'https://wandbox.org/api/compile.json';
+  const WANDBOX_COMPILER = 'gcc-13.2.0-c';
   const LANGUAGES = {
     python: {
       name: 'Python', extension: '.py', mime: 'text/x-python;charset=utf-8',
@@ -17,9 +19,9 @@
     },
     c: {
       name: 'C', extension: '.c', mime: 'text/x-c;charset=utf-8',
-      title: 'C editor', runtimeName: 'Clang for WebAssembly',
+      title: 'C editor', runtimeName: 'Wandbox GCC',
       hint: 'Tip: use Tab to indent · Ctrl+Enter (⌘+Enter on Mac) to run.',
-      runbar: 'C runs locally in a WebAssembly sandbox. First setup downloads Clang (about 100 MB); your browser normally reuses it from its cache.',
+      runbar: 'C code is sent to Wandbox and runs remotely. Do not submit secrets or private code.',
       sample: '#include <stdio.h>\n\nint main(void) {\n    printf("Hello from C!\\n");\n    return 0;\n}'
     }
   };
@@ -40,12 +42,6 @@
   let drafts = readDrafts();
   let pyodide = null;
   let pyodidePromise = null;
-  let wasmerPromise = null;
-  let cCompilerSandbox = null;
-  let legacyWasmer = null;
-  let Directory = null;
-  let cCompilerPromise = null;
-  let coiScriptPromise = null;
   let isRunning = false;
   let toastTimer = null;
 
@@ -161,7 +157,7 @@
     $('runbar-description').textContent = language.runbar;
     $('page-title').textContent = `Learn by running ${language.name}.`;
     $('page-intro').textContent = currentLanguage === 'c'
-      ? 'Write a C program, compile it in your browser, and keep a record of what you’ve tried. Your code and run history stay in this browser.'
+      ? 'Write a C program and run it with a remote compiler. Your code and run history stay in this browser, but C source is sent to Wandbox when you run it.'
       : 'Write a little code, run it right here, and keep a record of what you’ve tried. Your code and run history stay in this browser.';
     $('language-workspace').setAttribute('aria-label', `${language.name} workspace`);
     editor.setAttribute('aria-label', `${language.name} code editor`);
@@ -180,9 +176,11 @@
     updateLineNumbers();
     updateCursorPosition();
     clearOutput();
-    const ready = language === 'python' ? Boolean(pyodide) : Boolean(cCompilerSandbox);
+    const ready = language === 'python' ? Boolean(pyodide) : true;
     setReadyButton(ready, ready ? `Run ${LANGUAGES[language].name}` : `Prepare ${LANGUAGES[language].name}…`);
-    setRuntimeStatus(ready ? `${LANGUAGES[language].name} runtime ready` : `Checking ${LANGUAGES[language].name} runtime…`, ready ? 'ready' : 'loading');
+    setRuntimeStatus(ready
+      ? (language === 'c' ? 'C ready · compilation runs on Wandbox' : 'Python runtime ready')
+      : 'Checking Python runtime…', ready ? 'ready' : 'loading');
   }
 
   function loadScript(src, key) {
@@ -235,66 +233,12 @@
     }
   }
 
-  function loadCoiScript() {
-    if (window.crossOriginIsolated) return Promise.resolve();
-    if (!window.isSecureContext || !('serviceWorker' in navigator)) {
-      return Promise.reject(new Error('C requires a secure browser with Service Worker support. Open the HTTPS site in a modern browser.'));
-    }
-    if (coiScriptPromise) return coiScriptPromise;
-    coiScriptPromise = loadScript('coi-serviceworker.js', 'coi-serviceworker')
-      .then(async () => {
-        await navigator.serviceWorker.ready;
-        if (!window.crossOriginIsolated) {
-          setRuntimeStatus('Enabling C runtime support… the page will refresh once', 'loading');
-          setTimeout(() => window.location.reload(), 400);
-          return new Promise(() => {});
-        }
-      });
-    return coiScriptPromise;
-  }
-
   async function ensureCRuntime() {
-    if (cCompilerSandbox) return cCompilerSandbox;
-    if (cCompilerPromise) return cCompilerPromise;
-    cCompilerPromise = (async () => {
-      setRuntimeStatus('Checking browser support for C…', 'loading');
-      setReadyButton(false, 'Preparing C…');
-      await loadCoiScript();
-      if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') {
-        throw new Error('The browser could not enable the isolated WebAssembly runtime required by C. Try reloading the page or use a current browser.');
-      }
-      setRuntimeStatus('Checking C compiler… first setup downloads Clang (about 100 MB)', 'loading');
-      if (!wasmerPromise) {
-        wasmerPromise = import(`https://unpkg.com/@wasmer/sdk@${WASMER_SDK_VERSION}/dist/index.mjs`)
-          .then(async (sdk) => {
-            await sdk.init();
-            legacyWasmer = sdk.Wasmer;
-            Directory = sdk.Directory;
-            return sdk.Wasmer.fromRegistry('clang/clang');
-          });
-      }
-      cCompilerSandbox = await wasmerPromise;
-      return cCompilerSandbox;
-    })();
-    try {
-      const runtime = await cCompilerPromise;
-      if (currentLanguage === 'c') {
-        setRuntimeStatus('C compiler ready', 'ready');
-        setReadyButton(true, 'Run C');
-      }
-      return runtime;
-    } catch (error) {
-      cCompilerPromise = null;
-      wasmerPromise = null;
-      legacyWasmer = null;
-      Directory = null;
-      if (currentLanguage === 'c') {
-        setRuntimeStatus('C runtime unavailable', 'error');
-        setReadyButton(true, 'Retry C setup');
-        showToast(error.message || 'Could not install the C runtime. Check your connection and retry.');
-      }
-      throw error;
+    if (currentLanguage === 'c') {
+      setRuntimeStatus('C ready · compilation runs on Wandbox', 'ready');
+      setReadyButton(true, 'Run C');
     }
+    return true;
   }
 
   async function prepareRuntime(language = currentLanguage) {
@@ -332,53 +276,50 @@
     }
   }
 
-  function decodeLegacyOutput(value) {
-    if (typeof value === 'string') return value;
-    if (value instanceof Uint8Array) return new TextDecoder().decode(value);
-    if (value instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(value));
-    if (value && value.buffer instanceof ArrayBuffer) return new TextDecoder().decode(value);
-    return value == null ? '' : String(value);
-  }
-
-  function getLegacyProcessText(result) {
-    return [decodeLegacyOutput(result && result.stdout), decodeLegacyOutput(result && result.stderr)].filter(Boolean).join('\n');
-  }
-
   async function runC(code) {
     const started = performance.now();
-    const compiler = await ensureCRuntime();
-    const project = new Directory();
-    await project.writeFile('main.c', code);
-    const compileInstance = await compiler.entrypoint.run({
-      args: ['/project/main.c', '-o', '/project/main.wasm'],
-      mount: { '/project': project }
-    });
-    const compile = await compileInstance.wait();
-    const compileText = getLegacyProcessText(compile);
-    if (!compile.ok) {
-      const duration = (performance.now() - started) / 1000;
-      const result = compileText || `C compilation failed (exit code ${compile.code ?? compile.exitCode ?? 'unknown'}).`;
-      setOutput(result, true, duration);
-      storeRun(code, false, result);
-      return;
+    if (code.length > MAX_C_SOURCE_LENGTH) {
+      throw new Error(`This C editor accepts source up to ${MAX_C_SOURCE_LENGTH.toLocaleString()} characters to limit upload size.`);
     }
-
-    const wasmBytes = await project.readFile('main.wasm');
-    const executable = await legacyWasmer.fromFile(wasmBytes);
-    const runInstance = await executable.entrypoint.run();
-    const result = await runInstance.wait();
-    const text = getLegacyProcessText(result);
+    setRuntimeStatus('Sending C source to Wandbox…', 'loading');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    let response;
+    try {
+      response = await fetch(WANDBOX_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ compiler: WANDBOX_COMPILER, code, options: '', stdin: '' }),
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('Wandbox took too long to respond. Please try again.');
+      throw new Error('Could not reach Wandbox. Check your connection and try again.');
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok) {
+      if (response.status === 429) throw new Error('Wandbox is rate-limiting requests. Wait a moment and try again.');
+      throw new Error(`Wandbox returned HTTP ${response.status}. Please try again later.`);
+    }
+    const result = await response.json();
+    const compileError = result.compiler_error || '';
+    const compileOutput = result.compiler_output || '';
+    const programOutput = result.program_output || '';
+    const programError = result.program_error || '';
+    let message = [compileOutput, compileError, programOutput, programError].filter(Boolean).join('\n');
+    if (message.length > 12000) message = `${message.slice(0, 12000)}\n[Output truncated]`;
     const duration = (performance.now() - started) / 1000;
-    const success = Boolean(result.ok);
-    const exitCode = result.code ?? result.exitCode;
-    const display = text || (success ? 'Program finished with no output.' : `C program exited with code ${exitCode ?? 'unknown'}.`);
+    const success = String(result.status) === '0';
+    const display = message || (success ? 'Program finished with no output.' : `C program exited with status ${result.status || 'unknown'}.`);
     setOutput(display, !success, duration);
     storeRun(code, success, display);
+    setRuntimeStatus('C ready · compilation runs on Wandbox', 'ready');
   }
 
   async function runCode() {
     if (isRunning) return;
-    if ((currentLanguage === 'python' && !pyodide) || (currentLanguage === 'c' && !cCompilerSandbox)) {
+    if (currentLanguage === 'python' && !pyodide) {
       await prepareRuntime();
       return;
     }
@@ -402,7 +343,7 @@
     } finally {
       isRunning = false;
       setReadyButton(true, `Run ${LANGUAGES[currentLanguage].name}`);
-      setRuntimeStatus(`${LANGUAGES[currentLanguage].name} runtime ready`, 'ready');
+      setRuntimeStatus(currentLanguage === 'c' ? 'C ready · compilation runs on Wandbox' : 'Python runtime ready', 'ready');
     }
   }
 
