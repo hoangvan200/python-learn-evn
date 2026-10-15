@@ -67,6 +67,14 @@ for number in range(1, 4):
           <button id="suggestions-button" class="suggestions-button" type="button" title="Show code suggestions (Ctrl+Space)">Suggestions <kbd>Ctrl+Space</kbd></button>
           <span id="cursor-position" aria-live="polite">Ln 1, Col 1</span>
         </div>
+        <section class="stdin-panel" aria-labelledby="stdin-title">
+          <div class="stdin-heading">
+            <div><h3 id="stdin-title">Program input <span>(stdin)</span></h3><p>Enter values in read order, one per line, before running.</p></div>
+            <button id="clear-stdin-button" class="text-button" type="button" aria-label="Clear program input">Clear</button>
+          </div>
+          <label class="sr-only" for="stdin-input">Input values for input() or scanf(), one value per line</label>
+          <textarea id="stdin-input" class="stdin-input" rows="3" spellcheck="false" autocomplete="off" placeholder="Example:&#10;Ada&#10;42"></textarea>
+        </section>
         <div class="runbar">
           <p id="runbar-description">Python runs locally in your browser with Pyodide.</p>
           <button id="run-button" class="button button-primary" type="button" disabled><span aria-hidden="true">▶</span> <span id="run-label">Starting Python…</span></button>

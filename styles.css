@@ -79,6 +79,14 @@ h1 { margin: 0; font-size: clamp(27px, 3.2vw, 38px); line-height: 1.14; letter-s
 #cursor-position { flex: 0 0 auto; font-family: var(--mono); }
 .runbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-top: 1px solid var(--line); }
 .runbar p { margin: 0; color: var(--muted); font-size: 11px; }
+.stdin-panel { padding: 10px 18px 12px; border-top: 1px solid var(--line); background: #fff; }
+.stdin-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.stdin-heading h3 { margin: 0; color: #414a60; font-size: 11px; font-weight: 700; }
+.stdin-heading h3 span { color: #8b92a3; font: 10px var(--mono); }
+.stdin-heading p { margin: 3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.stdin-input { display: block; width: 100%; min-height: 62px; max-height: 140px; resize: vertical; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fbfcff; color: #33415d; font: 11px/1.55 var(--mono); transition: border-color .18s, box-shadow .18s, background .18s; }
+.stdin-input::placeholder { color: #a1a8b7; }
+.stdin-input:focus { outline: none; border-color: #bdb4fb; background: #fff; box-shadow: 0 0 0 3px rgba(103,84,220,.1); }
 .compact-heading { padding: 16px 17px; }
 .compact-heading p { line-height: 1.35; }
 .text-button { padding: 7px 2px 7px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--purple); font-size: 10px; font-weight: 700; white-space: nowrap; transition: color .18s, background .18s; }
@@ -142,6 +150,8 @@ h1 { margin: 0; font-size: clamp(27px, 3.2vw, 38px); line-height: 1.14; letter-s
   .suggestions-button { grid-area: suggestions; justify-self: start; }
   .runbar { gap: 8px; padding: 11px 12px; }
   .runbar p { max-width: 145px; font-size: 10px; line-height: 1.4; }
+  .stdin-panel { padding: 10px 12px; }
+  .stdin-input { min-height: 58px; font-size: 10px; }
   .button-primary { min-width: 118px; }
   .compact-heading { padding: 14px; }
   .output-area { min-height: 170px; padding: 15px; font-size: 11px; }

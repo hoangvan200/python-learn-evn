@@ -6,8 +6,10 @@ import { createCodeEditor } from './code-editor.js';
   const HISTORY_KEY = 'python-learn-environment-history-v1';
   const LANGUAGE_KEY = 'python-learn-environment-language-v1';
   const DRAFTS_KEY = 'python-learn-environment-drafts-v1';
+  const STDIN_KEY = 'python-learn-environment-stdin-v1';
   const MAX_HISTORY = 30;
   const MAX_C_SOURCE_LENGTH = 32768;
+  const MAX_STDIN_LENGTH = 32768;
   const PYODIDE_VERSION = '0.26.2';
   const WANDBOX_API = 'https://wandbox.org/api/compile.json';
   const WANDBOX_COMPILER = 'gcc-13.2.0-c';
@@ -40,9 +42,11 @@ import { createCodeEditor } from './code-editor.js';
   const historyList = $('history-list');
   const languageSelect = $('language-select');
   const filePicker = $('file-picker');
+  const stdinInput = $('stdin-input');
 
   let currentLanguage = readStoredLanguage();
   let drafts = readDrafts();
+  let stdinDrafts = readStdinDrafts();
   let pyodide = null;
   let pyodidePromise = null;
   let isRunning = false;
@@ -78,6 +82,16 @@ import { createCodeEditor } from './code-editor.js';
       const value = JSON.parse(storageGet(DRAFTS_KEY, '{}'));
       return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     } catch { return {}; }
+  }
+  function readStdinDrafts() {
+    try {
+      const value = JSON.parse(storageGet(STDIN_KEY, '{}'));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch { return {}; }
+  }
+  function saveStdinDraft() {
+    stdinDrafts[currentLanguage] = stdinInput.value;
+    if (!storageSet(STDIN_KEY, JSON.stringify(stdinDrafts))) showToast('Could not save program input in browser storage.');
   }
   function saveDraft() {
     drafts[currentLanguage] = editor.value;
@@ -177,6 +191,7 @@ import { createCodeEditor } from './code-editor.js';
     $('language-workspace').setAttribute('aria-label', `${language.name} workspace`);
     editor.setAttribute('aria-label', `${language.name} code editor`);
     filePicker.accept = currentLanguage === 'c' ? '.c,.h,text/x-c,text/plain' : '.py,text/x-python,text/plain';
+    stdinInput.placeholder = 'Example:\nAda\n42';
   }
 
   function selectLanguage(language, codeOverride = null) {
@@ -189,6 +204,7 @@ import { createCodeEditor } from './code-editor.js';
     codeEditor.setLanguage(language);
     editor.value = codeOverride ?? (typeof drafts[language] === 'string' ? drafts[language] : LANGUAGES[language].sample);
     drafts[language] = editor.value;
+    stdinInput.value = typeof stdinDrafts[language] === 'string' ? stdinDrafts[language] : '';
     updateCursorPosition();
     clearOutput();
     const ready = language === 'python' ? Boolean(pyodide) : true;
@@ -265,33 +281,39 @@ import { createCodeEditor } from './code-editor.js';
     }
   }
 
-  async function runPython(code) {
+  async function runPython(code, programInput) {
     const stdout = [];
     const stderr = [];
     const started = performance.now();
+    const normalizedInput = programInput.replace(/\r\n?/g, '\n');
+    const inputText = normalizedInput && !normalizedInput.endsWith('\n') ? `${normalizedInput}\n` : normalizedInput;
+    const inputBytes = Array.from(new TextEncoder().encode(inputText));
+    let inputOffset = 0;
     pyodide.setStdout({ batched: (text) => stdout.push(text) });
     pyodide.setStderr({ batched: (text) => stderr.push(text) });
+    pyodide.setStdin({ stdin: () => inputOffset < inputBytes.length ? inputBytes[inputOffset++] : null });
     try {
       await pyodide.runPythonAsync(code);
       const chunks = [...stdout, ...stderr];
       const result = chunks.join('\n') + (chunks.length ? '\n' : '');
       const duration = (performance.now() - started) / 1000;
       setOutput(result, false, duration);
-      storeRun(code, true, result);
+      storeRun(code, true, result, programInput);
     } catch (error) {
       const chunks = [...stdout, ...stderr];
       const detail = error && error.message ? error.message.replace(/^PythonError:\s*/, '') : String(error);
       const result = `${chunks.join('\n')}${chunks.length ? '\n' : ''}${detail}`;
       const duration = (performance.now() - started) / 1000;
       setOutput(result, true, duration);
-      storeRun(code, false, result);
+      storeRun(code, false, result, programInput);
     } finally {
       pyodide.setStdout({ batched: (text) => { if (text) console.log(text); } });
       pyodide.setStderr({ batched: (text) => { if (text) console.error(text); } });
+      pyodide.setStdin({ stdin: () => null });
     }
   }
 
-  async function runC(code) {
+  async function runC(code, programInput) {
     const started = performance.now();
     if (code.length > MAX_C_SOURCE_LENGTH) {
       throw new Error(`This C editor accepts source up to ${MAX_C_SOURCE_LENGTH.toLocaleString()} characters to limit upload size.`);
@@ -307,7 +329,7 @@ import { createCodeEditor } from './code-editor.js';
         response = await fetch(WANDBOX_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ compiler: WANDBOX_COMPILER, code, options: '', stdin: '' }),
+          body: JSON.stringify({ compiler: WANDBOX_COMPILER, code, options: '', stdin: programInput }),
           signal: controller.signal
         });
       } catch (error) {
@@ -338,7 +360,7 @@ import { createCodeEditor } from './code-editor.js';
     const success = String(result.status) === '0';
     const display = message || (success ? 'Program finished with no output.' : `C program exited with status ${result.status || 'unknown'}.`);
     setOutput(display, !success, duration);
-    storeRun(code, success, display);
+    storeRun(code, success, display, programInput);
     setRuntimeStatus('C ready · compilation runs on Wandbox', 'ready');
   }
 
@@ -349,32 +371,39 @@ import { createCodeEditor } from './code-editor.js';
       return;
     }
     const code = editor.value;
+    const programInput = stdinInput.value;
     saveDraft();
+    saveStdinDraft();
     isRunning = true;
     runButton.disabled = true;
+    stdinInput.disabled = true;
     runLabel.textContent = `Running ${LANGUAGES[currentLanguage].name}…`;
     output.classList.remove('has-error');
     output.textContent = '';
     const started = performance.now();
     try {
-      if (currentLanguage === 'python') await runPython(code);
-      else await runC(code);
+      if (programInput.length > MAX_STDIN_LENGTH) {
+        throw new Error(`Program input is limited to ${MAX_STDIN_LENGTH.toLocaleString()} characters per run.`);
+      }
+      if (currentLanguage === 'python') await runPython(code, programInput);
+      else await runC(code, programInput);
     } catch (error) {
       console.error(`${currentLanguage} execution failed:`, error);
       const duration = (performance.now() - started) / 1000;
       const message = error && error.message ? error.message : String(error);
       setOutput(message, true, duration);
-      storeRun(code, false, message);
+      storeRun(code, false, message, programInput);
     } finally {
       isRunning = false;
+      stdinInput.disabled = false;
       setReadyButton(true, `Run ${LANGUAGES[currentLanguage].name}`);
       setRuntimeStatus(currentLanguage === 'c' ? 'C ready · compilation runs on Wandbox' : 'Python runtime ready', 'ready');
     }
   }
 
-  function storeRun(code, success, result) {
+  function storeRun(code, success, result, programInput = stdinInput.value) {
     const history = readHistory();
-    history.unshift({ language: currentLanguage, code, success, result: String(result).slice(0, 5000), timestamp: new Date().toISOString() });
+    history.unshift({ language: currentLanguage, code, stdin: programInput, success, result: String(result).slice(0, 5000), timestamp: new Date().toISOString() });
     saveHistory(history);
     renderHistory();
   }
@@ -413,6 +442,12 @@ import { createCodeEditor } from './code-editor.js';
     prepareRuntime(language);
   });
   $('suggestions-button').addEventListener('click', () => codeEditor.showSuggestions());
+  stdinInput.addEventListener('input', saveStdinDraft);
+  $('clear-stdin-button').addEventListener('click', () => {
+    stdinInput.value = '';
+    saveStdinDraft();
+    stdinInput.focus();
+  });
   runButton.addEventListener('click', runCode);
   $('clear-output-button').addEventListener('click', clearOutput);
   $('clear-history-button').addEventListener('click', () => {
@@ -445,6 +480,8 @@ import { createCodeEditor } from './code-editor.js';
     if (!entry) return;
     const language = LANGUAGES[entry.language] ? entry.language : 'python';
     selectLanguage(language, entry.code || '');
+    stdinInput.value = typeof entry.stdin === 'string' ? entry.stdin : '';
+    saveStdinDraft();
     drafts[language] = editor.value;
     storageSet(DRAFTS_KEY, JSON.stringify(drafts));
     editor.focus();
