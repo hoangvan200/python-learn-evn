@@ -1,0 +1,20 @@
+{
+  "name": "code-learn-environment",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@codemirror/lang-cpp": "6.0.3",
+    "@codemirror/lang-python": "6.2.1",
+    "@codemirror/language": "6.13.1",
+    "codemirror": "6.0.2"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}

@@ -1,3 +1,5 @@
+import { createCodeEditor } from './code-editor.js';
+
 (() => {
   'use strict';
 
@@ -13,28 +15,29 @@
     python: {
       name: 'Python', extension: '.py', mime: 'text/x-python;charset=utf-8',
       title: 'Python editor', runtimeName: 'Pyodide',
-      hint: 'Tip: use Tab to indent · Ctrl+Enter (⌘+Enter on Mac) to run.',
+      hint: 'Tab indents · Type for suggestions.',
       runbar: 'Python runs locally in your browser with Pyodide.',
       sample: '# Try changing this program, then click Run.\nname = "Python learner"\nprint(f"Hello, {name}!")\n\nfor number in range(1, 4):\n    print(f"This is run number {number}.")'
     },
     c: {
       name: 'C', extension: '.c', mime: 'text/x-c;charset=utf-8',
       title: 'C editor', runtimeName: 'Wandbox GCC',
-      hint: 'Tip: use Tab to indent · Ctrl+Enter (⌘+Enter on Mac) to run.',
+      hint: 'Tab indents · Type for suggestions.',
       runbar: 'C code is sent to Wandbox and runs remotely. Do not submit secrets or private code.',
       sample: '#include <stdio.h>\n\nint main(void) {\n    printf("Hello from C!\\n");\n    return 0;\n}'
     }
   };
 
   const $ = (id) => document.getElementById(id);
-  const editor = $('code-editor');
+  const MODIFIER_LABEL = /Mac|iPhone|iPad/i.test(navigator.userAgentData?.platform || navigator.platform) ? '⌘' : 'Ctrl';
+  let editor;
+  let codeEditor;
   const output = $('output');
   const runButton = $('run-button');
   const runLabel = $('run-label');
   const status = $('runtime-status');
   const indicator = $('runtime-indicator');
   const historyList = $('history-list');
-  const lineNumbers = $('line-numbers');
   const languageSelect = $('language-select');
   const filePicker = $('file-picker');
 
@@ -44,6 +47,21 @@
   let pyodidePromise = null;
   let isRunning = false;
   let toastTimer = null;
+
+  codeEditor = createCodeEditor({
+    host: $('code-editor'),
+    initialValue: $('initial-code').value,
+    language: currentLanguage,
+    onChange: () => {
+      if (!editor) return;
+      saveDraft();
+      updateCursorPosition();
+    },
+    onSelectionChange: () => { if (editor) updateCursorPosition(); },
+    onRun: () => runCode()
+  });
+  editor = codeEditor.editor;
+  $('initial-code').remove();
 
   function storageGet(key, fallback = null) {
     try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
@@ -82,11 +100,6 @@
   function setReadyButton(ready, label = 'Run code') {
     runButton.disabled = isRunning || !ready;
     runLabel.textContent = label;
-  }
-
-  function updateLineNumbers() {
-    const lineCount = Math.max(1, editor.value.split('\n').length);
-    lineNumbers.textContent = Array.from({ length: lineCount }, (_, index) => index + 1).join('\n');
   }
 
   function updateCursorPosition() {
@@ -153,7 +166,9 @@
     const language = LANGUAGES[currentLanguage];
     $('editor-title').textContent = language.title;
     $('editor-filename').textContent = `main${language.extension}`;
-    $('editor-hint').textContent = language.hint;
+    $('editor-hint').textContent = `${language.hint} · ${MODIFIER_LABEL}+Enter runs.`;
+    $('suggestions-button').innerHTML = `Suggestions <kbd>${MODIFIER_LABEL}+Space</kbd>`;
+    $('suggestions-button').title = `Show code suggestions (${MODIFIER_LABEL}+Space)`;
     $('runbar-description').textContent = language.runbar;
     $('page-title').textContent = `Learn by running ${language.name}.`;
     $('page-intro').textContent = currentLanguage === 'c'
@@ -171,9 +186,9 @@
     languageSelect.value = language;
     storageSet(LANGUAGE_KEY, language);
     setCodeFileType();
+    codeEditor.setLanguage(language);
     editor.value = codeOverride ?? (typeof drafts[language] === 'string' ? drafts[language] : LANGUAGES[language].sample);
     drafts[language] = editor.value;
-    updateLineNumbers();
     updateCursorPosition();
     clearOutput();
     const ready = language === 'python' ? Boolean(pyodide) : true;
@@ -388,31 +403,6 @@
     prepareRuntime(targetLanguage);
   }
 
-  function bindEditor() {
-    editor.addEventListener('input', () => {
-      updateLineNumbers();
-      updateCursorPosition();
-      saveDraft();
-    });
-    editor.addEventListener('click', updateCursorPosition);
-    editor.addEventListener('keyup', updateCursorPosition);
-    editor.addEventListener('scroll', () => { lineNumbers.scrollTop = editor.scrollTop; });
-    editor.addEventListener('keydown', (event) => {
-      if (event.key === 'Tab') {
-        event.preventDefault();
-        const start = editor.selectionStart;
-        const end = editor.selectionEnd;
-        editor.setRangeText('    ', start, end, 'end');
-        updateLineNumbers();
-        updateCursorPosition();
-        saveDraft();
-      } else if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        event.preventDefault();
-        runCode();
-      }
-    });
-  }
-
   languageSelect.addEventListener('change', () => {
     if (isRunning) {
       languageSelect.value = currentLanguage;
@@ -422,6 +412,7 @@
     selectLanguage(language);
     prepareRuntime(language);
   });
+  $('suggestions-button').addEventListener('click', () => codeEditor.showSuggestions());
   runButton.addEventListener('click', runCode);
   $('clear-output-button').addEventListener('click', clearOutput);
   $('clear-history-button').addEventListener('click', () => {
@@ -461,7 +452,6 @@
     showToast(`Loaded previous ${LANGUAGES[language].name} code into the editor.`);
   });
 
-  bindEditor();
   renderHistory();
   selectLanguage(currentLanguage);
   prepareRuntime(currentLanguage);

@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://wandbox.org" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -54,8 +54,8 @@
           </div>
         </div>
         <div class="editor-wrap">
-          <div class="line-numbers" id="line-numbers" aria-hidden="true">1</div>
-          <textarea id="code-editor" aria-label="Python code editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-describedby="editor-hint"># Try changing this program, then click Run.
+          <div id="code-editor" class="code-editor-host"></div>
+          <textarea id="initial-code" hidden># Try changing this program, then click Run.
 name = "Python learner"
 print(f"Hello, {name}!")
 
@@ -63,7 +63,8 @@ for number in range(1, 4):
     print(f"This is run number {number}.")</textarea>
         </div>
         <div class="editor-footer">
-          <span id="editor-hint">Tip: use the Tab key to indent your code.</span>
+          <span id="editor-hint">Tab indents · Type for suggestions · Ctrl+Enter to run.</span>
+          <button id="suggestions-button" class="suggestions-button" type="button" title="Show code suggestions (Ctrl+Space)">Suggestions <kbd>Ctrl+Space</kbd></button>
           <span id="cursor-position" aria-live="polite">Ln 1, Col 1</span>
         </div>
         <div class="runbar">
@@ -91,7 +92,7 @@ for number in range(1, 4):
           </div>
         </section>
       </div>
-    </section>
+    </div>
 
     <footer class="page-footer">
       <span>Made for curious minds.</span>
